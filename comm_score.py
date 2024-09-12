@@ -5,8 +5,7 @@ import requests
 import csv
 import time
 
-
-API_KEY = 'your_api_key_here'
+API_KEY = '84e48d8c8a60f2ba44ab14de08cd6d203902939847147782648b9569b7d8098d'
 HEADERS = {
     'accept': 'application/json',
     'x-apikey': API_KEY
@@ -19,48 +18,36 @@ def get_file_hash(file_path):
             sha256_hash.update(byte_block)
     return sha256_hash.hexdigest()
 
+def api_request(url, method='GET', files=None):
+    retries = 10
+    wait_time = 10
+    for _ in range(retries):
+        response = requests.request(method, url, headers=HEADERS, files=files)
+        if response.status_code == 200:
+            return response.json()
+        print(f"Error {method} {url}: {response.status_code}")
+        time.sleep(wait_time)
+    return None
+
 def upload_file(file_path):
     url = 'https://www.virustotal.com/api/v3/files'
-    with open(file_path, 'rb') as f:
-        files = {'file': (os.path.basename(file_path), f)}
-        response = requests.post(url, headers=HEADERS, files=files)
-    
-    if response.status_code == 200:
-        response_json = response.json()
+    files = {'file': (os.path.basename(file_path), open(file_path, 'rb'))}
+    response_json = api_request(url, method='POST', files=files)
+    if response_json:
         analysis_id = response_json['data']['id']
-        print(f"Uploaded {file_path}, analysis ID: {analysis_id}")
         return analysis_id
-    else:
-        print(f"Failed to upload {file_path}: {response.status_code} - {response.text}")
-        return None
+    return None
 
-def get_report(analysis_id, retries=5, wait_time=10):
-    url = f'https://www.virustotal.com/api/v3/analyses/{analysis_id}'    
-    for _ in range(retries):
-        response = requests.get(url, headers=HEADERS)
-        if response.status_code == 200:
-            report_json = response.json()
-            if report_json['data']['attributes']['status'] == 'completed':
-                print(f"Report is ready for analysis ID: {analysis_id}")
-                return report_json
-            else:
-                print(f"Waiting for report (analysis ID: {analysis_id})...")
-                time.sleep(wait_time)
-        else:
-            print(f"Error fetching report for {analysis_id}: {response.status_code}")
-            time.sleep(wait_time)
-    
-    print(f"Report not ready after {retries} retries.")
+def get_report(analysis_id):
+    url = f'https://www.virustotal.com/api/v3/analyses/{analysis_id}'
+    report_json = api_request(url)
+    if report_json and report_json['data']['attributes']['status'] == 'completed':
+        return report_json
     return None
 
 def extract_community_score(report_json):
-    if not report_json or "data" not in report_json:
-        print("Invalid report JSON format")
-        return 0    
     results = report_json.get("data", {}).get("attributes", {}).get("results", {})
-    malicious_count = sum(1 for engine in results.values() if engine.get('category') == 'malicious')
-    
-    return malicious_count
+    return sum(1 for engine in results.values() if engine.get('category') == 'malicious')
 
 def save_report(report_json, report_path):
     with open(report_path, 'w') as json_file:
@@ -75,83 +62,79 @@ def read_json_file(file_path):
         print(f"Error reading JSON file {file_path}: {e}")
         return None
 
-def process_executable(original_file_path, modified_folders, report_folder_base, csv_writer):
-    original_name = os.path.basename(original_file_path)
-    original_report_file = os.path.join(report_folder_base, "original", f"{original_name}.json")
-    
-    if not os.path.exists(original_report_file):
-        print(f"Uploading {original_name} to VirusTotal...")
-        analysis_id = upload_file(original_file_path)
-        if analysis_id:
-            original_report = get_report(analysis_id)
-            if original_report:
-                save_report(original_report, original_report_file)
-                original_score = extract_community_score(original_report)
-            else:
-                original_score = 0
-        else:
-            original_score = 0
-    else:
-        original_report = read_json_file(original_report_file)
-        original_score = extract_community_score(original_report) if original_report else 0
-    
-    modified_scores = []
-    for subfolder, folder_path in modified_folders.items():
-        modified_file_path = os.path.join(folder_path, f"modified_{original_name}")
-        if os.path.exists(modified_file_path):
-            modified_report_file = os.path.join(report_folder_base, subfolder, f"modified_{original_name}.json")
-            if not os.path.exists(modified_report_file):
-                print(f"Uploading modified {original_name} to VirusTotal")
-                analysis_id = upload_file(modified_file_path)
-                if analysis_id:
-                    modified_report = get_report(analysis_id)
-                    if modified_report:
-                        save_report(modified_report, modified_report_file)
-                        modified_score = extract_community_score(modified_report)
-                    else:
-                        modified_score = 0
-                else:
-                    modified_score = 0
-            else:
-                modified_report = read_json_file(modified_report_file)
-                modified_score = extract_community_score(modified_report) if modified_report else 0
-        else:
-            print(f"Modified executable does not exist: {modified_file_path}")
-            modified_score = 0
-        
-        modified_scores.append(modified_score)
-
-    csv_writer.writerow([original_name, original_score] + modified_scores)
-    print(f"Processed {original_name} with scores: Original - {original_score}, Modified - {modified_scores}")
-
 def get_modified_folders(base_folder):
     modified_folders = {}
     for subfolder in sorted(os.listdir(base_folder)):
         subfolder_path = os.path.join(base_folder, subfolder)
         if os.path.isdir(subfolder_path):
-            modified_folders[subfolder] = subfolder_path
+            for root, _, files in os.walk(subfolder_path):
+                for file in files:
+                    if file.startswith("modified_") and file.endswith(".exe"):
+                        modified_folders.setdefault(subfolder, []).append(os.path.join(root, file))
     return modified_folders
 
-def process_reports(original_base_folder, modified_base_folder, report_folder_base, csv_path):
+def process_executable(original_file_path, modified_folders, report_folder_base, csv_writer):
+    original_name = os.path.basename(original_file_path)
+    original_report_file = os.path.join(report_folder_base, "original", f"{original_name}.json")
+    
+    if not os.path.exists(original_report_file):
+        analysis_id = upload_file(original_file_path)
+        if analysis_id:
+            original_report = get_report(analysis_id)
+            if original_report:
+                save_report(original_report, original_report_file)
+            else:
+                print(f"Failed to get report for {original_name}")
+        else:
+            print(f"Failed to upload {original_name}")
+    
+    original_score = extract_community_score(read_json_file(original_report_file)) if os.path.exists(original_report_file) else 0
+    
+    modified_scores = []
+    for subfolder, files in sorted(modified_folders.items()):
+        matching_file = next((file for file in files if original_name in file), None)
+        if matching_file:
+            modified_report_file = os.path.join(report_folder_base, subfolder, f"modified_{original_name}.json")
+            if not os.path.exists(modified_report_file):
+                analysis_id = upload_file(matching_file)
+                if analysis_id:
+                    modified_report = get_report(analysis_id)
+                    if modified_report:
+                        save_report(modified_report, modified_report_file)
+                else:
+                    print(f"Failed to upload modified {original_name}")
+            modified_score = extract_community_score(read_json_file(modified_report_file)) if os.path.exists(modified_report_file) else 0
+        else:
+            print(f"Modified executable does not exist in subfolders for: {original_name}")
+            modified_score = 0
+        modified_scores.append(modified_score)
+
+    csv_writer.writerow([original_name, original_score] + modified_scores)
+    print(f"Processed {original_name} with scores: Original - {original_score}, Modified - {modified_scores}")
+
+def process_reports(original_folder, modified_base_folder, report_folder_base, csv_path):
     os.makedirs(os.path.join(report_folder_base, "original"), exist_ok=True)
+    
     modified_folders = get_modified_folders(modified_base_folder)
     
-    for subfolder in modified_folders.values():
+    for subfolder in sorted(modified_folders.keys()):
         os.makedirs(os.path.join(report_folder_base, subfolder), exist_ok=True)
 
+    header_columns = ["Original Executable", "Original Score"] + sorted(modified_folders.keys(), key=lambda x: int(x))
+    
     with open(csv_path, mode='w', newline='') as csv_file:
         csv_writer = csv.writer(csv_file)
-        csv_writer.writerow(["Original Executable", "Original Score"] + [f"{folder}%" for folder in sorted(modified_folders.keys())])
+        csv_writer.writerow(header_columns)
         
-        for root, dirs, files in os.walk(original_base_folder):
+        for root, _, files in os.walk(original_folder):
             for file in files:
                 if file.endswith(".exe"):
                     process_executable(os.path.join(root, file), modified_folders, report_folder_base, csv_writer)
 
-
-original_base_folder = "/media/doonu/H/Problem_Space/Dummy"
-modified_base_folder = "/media/doonu/H/Problem_Space/Manipulated Executable NOP"
+# Define paths
+original_folder = "/media/doonu/H/Problem_Space/Dummy/"
+modified_base_folder = "/media/doonu/H/Problem_Space/Manipulated_Executable_NOP/"
 report_folder_base = "/media/doonu/H/Problem_Space/Reports/"
-csv_path = "/media/doonu/H/Problem_Space/Community_Score/dummy_community_scores.csv"
+csv_path = "/media/doonu/H/Problem_Space/Community_Score/community_scores.csv"
 
-process_reports(original_base_folder, modified_base_folder, report_folder_base, csv_path)
+process_reports(original_folder, modified_base_folder, report_folder_base, csv_path)
