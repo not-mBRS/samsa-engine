@@ -5,7 +5,7 @@ import requests
 import csv
 import time
 
-API_KEY = '84e48d8c8a60f2ba44ab14de08cd6d203902939847147782648b9569b7d8098d'
+API_KEY = ''
 HEADERS = {
     'accept': 'application/json',
     'x-apikey': API_KEY
