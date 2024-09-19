@@ -96,6 +96,8 @@ def process_executable(original_file_path, modified_folders, report_folder_base,
         if matching_file:
             modified_report_file = os.path.join(report_folder_base, subfolder, f"modified_{original_name}.json")
             if not os.path.exists(modified_report_file):
+            
+            # Check if the report already exists for the modified file
                 analysis_id = upload_file(matching_file)
                 if analysis_id:
                     modified_report = get_report(analysis_id)
