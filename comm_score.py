@@ -6,6 +6,7 @@ import csv
 import time
 
 API_KEY = '84e48d8c8a60f2ba44ab14de08cd6d203902939847147782648b9569b7d8098d'
+API_KEY = '75646191efded01c9985d7433971552a5032a8421d3e026ebbb6e0832b0729ba'
 HEADERS = {
     'accept': 'application/json',
     'x-apikey': API_KEY
@@ -43,6 +44,21 @@ def get_report(analysis_id):
     report_json = api_request(url)
     if report_json and report_json['data']['attributes']['status'] == 'completed':
         return report_json
+    
+    retries = 10  # Number of retries
+    wait_time = 30  # Time to wait between retries (in seconds)
+    
+    for attempt in range(retries):
+        report_json = api_request(url)
+        if report_json:
+            status = report_json['data']['attributes']['status']
+            if status == 'completed':
+                return report_json
+            else:
+                print(f"Report not ready (status: {status}). Retry {attempt + 1}/{retries}. Waiting {wait_time} seconds...")
+        time.sleep(wait_time)
+    
+    print(f"Failed to get report for analysis ID {analysis_id} after {retries} retries.")
     return None
 
 def extract_community_score(report_json):
@@ -78,6 +94,11 @@ def process_executable(original_file_path, modified_folders, report_folder_base,
     original_report_file = os.path.join(report_folder_base, "original", f"{original_name}.json")
     
     if not os.path.exists(original_report_file):
+    # Check if the report already exists for the original file
+    if os.path.exists(original_report_file):
+        print(f"Report for {original_name} already exists. Skipping.")
+    else:
+        # Upload original file and get report if it doesn't already exist
         analysis_id = upload_file(original_file_path)
         if analysis_id:
             original_report = get_report(analysis_id)
@@ -98,17 +119,25 @@ def process_executable(original_file_path, modified_folders, report_folder_base,
             if not os.path.exists(modified_report_file):
             
             # Check if the report already exists for the modified file
+            if os.path.exists(modified_report_file):
+                print(f"Report for modified {original_name} in {subfolder} already exists. Skipping.")
+            else:
+                # Upload modified file and get report if it doesn't already exist
                 analysis_id = upload_file(matching_file)
                 if analysis_id:
                     modified_report = get_report(analysis_id)
                     if modified_report:
                         save_report(modified_report, modified_report_file)
+                    else:
+                        print(f"Failed to get report for modified {original_name}")
                 else:
                     print(f"Failed to upload modified {original_name}")
+                    
             modified_score = extract_community_score(read_json_file(modified_report_file)) if os.path.exists(modified_report_file) else 0
         else:
             print(f"Modified executable does not exist in subfolders for: {original_name}")
             modified_score = 0
+        
         modified_scores.append(modified_score)
 
     csv_writer.writerow([original_name, original_score] + modified_scores)
@@ -138,5 +167,9 @@ original_folder = "/media/doonu/H/Problem_Space/Dummy/"
 modified_base_folder = "/media/doonu/H/Problem_Space/Manipulated_Executable_NOP/"
 report_folder_base = "/media/doonu/H/Problem_Space/Reports/"
 csv_path = "/media/doonu/H/Problem_Space/Community_Score/community_scores.csv"
+original_folder = "/media/doonu/H/Malware/"
+modified_base_folder = "/media/doonu/H/Problem_Space/Padded_Manipulated Executable/"
+report_folder_base = "/media/doonu/H/Problem_Space/Reports_Padded/"
+csv_path = "/media/doonu/H/Problem_Space/Community_Score/padded_community_scores.csv"
 
 process_reports(original_folder, modified_base_folder, report_folder_base, csv_path)
