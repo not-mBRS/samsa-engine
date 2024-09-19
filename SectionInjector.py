@@ -53,7 +53,7 @@ for i in NOP_INSTRUCTIONS:
 
 exit()
 '''
-input_folder = "./dataset/malware_test"
+input_folder = "./dataset/Malware"
 output_folder = "./dataset/mutations"
 
 def get_slack_space(section_data):
@@ -74,12 +74,23 @@ def find_target_section(pe):
 def inject_random_nop(pe, bits, output_file, percentage=.9):
     if bits==32:
         mode = ks.KS_MODE_32
-    else:
+    if bits==64:
+        os.remove(output_file)
+        return
         mode = ks.KS_MODE_64
+    else:
+        print(bits)
     keys = ks.Ks(ks.KS_ARCH_X86, mode)
-    target_section= find_target_section(pe)
+    try:
+        target_section= find_target_section(pe)
+    except:
+        os.remove(output_file)
+        return            
     slack_region_byte_count = get_slack_space(target_section.get_data())
     injection_size = int(slack_region_byte_count * percentage)
+    if injection_size < 16: 
+        os.remove(output_file)
+        return
     to_insert = []
     while(injection_size>1):
         random_nop = random.choice(NOP_INSTRUCTIONS)
@@ -89,23 +100,26 @@ def inject_random_nop(pe, bits, output_file, percentage=.9):
         to_insert.append(encoding)
         injection_size-=count
     to_insert_flatten = [item for sublist in to_insert for item in sublist]
-    first_part = target_section.PointerToRawData + len(target_section.get_data()) - slack_region_byte_count
+    first_part = target_section.PointerToRawData + 15 + len(target_section.get_data()) - slack_region_byte_count
     with open(output_file, 'rb') as f:
         original_data = f.read()
     with open(output_file, 'wb') as f:
         modified_data = (
-            original_data[:first_part] +
+            original_data[:first_part+15] +
             bytes(to_insert_flatten) +
-            original_data[first_part + len(bytes(to_insert_flatten)):] # last part
+            original_data[first_part + len(bytes(to_insert_flatten))-15:] # last part
         )
         
         f.write(modified_data)
 
-def process_executables(input_folder, outptut_folder, percentage=.9):
+def process_executables(input_folder, outptut_folder, percentage=.5):
     for root, _, files in os.walk(input_folder):
         for file_name in files:
             input_file = os.path.join(root, file_name)
-            output_file = os.path.join(outptut_folder, file_name)
+            family_folder = output_folder+"/"+str(int(percentage*100))+"/"+root.split('/')[-1]
+            if not os.path.exists(family_folder):
+                os.makedirs(family_folder)
+            output_file = os.path.join(family_folder, file_name)
             shutil.copyfile(input_file, output_file)
             
             r2 = r2pipe.open(output_file, ['-w'])
@@ -120,7 +134,8 @@ def process_executables(input_folder, outptut_folder, percentage=.9):
 def main():
     if not os.path.exists(output_folder):
         os.makedirs(output_folder)
-    process_executables(input_folder, output_folder)
+    for perc in [0.05, 0.1, 0.25, 0.5]:
+        process_executables(input_folder, output_folder, perc)
 
 if __name__ == "__main__":
     main()
