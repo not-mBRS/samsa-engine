@@ -5,7 +5,7 @@ import requests
 import csv
 import time
 
-API_KEY = ''
+API_KEY = '84e48d8c8a60f2ba44ab14de08cd6d203902939847147782648b9569b7d8098d'
 HEADERS = {
     'accept': 'application/json',
     'x-apikey': API_KEY
@@ -69,11 +69,11 @@ def get_modified_folders(base_folder):
         if os.path.isdir(subfolder_path):
             for root, _, files in os.walk(subfolder_path):
                 for file in files:
-                    if file.startswith("modified_") and file.endswith(".exe"):
+                    if file.endswith(".exe"):
                         modified_folders.setdefault(subfolder, []).append(os.path.join(root, file))
     return modified_folders
 
-def process_executable(original_file_path, modified_folders, report_folder_base, csv_writer):
+def process_executable(original_file_path, modified_folders, report_folder_base):
     original_name = os.path.basename(original_file_path)
     original_report_file = os.path.join(report_folder_base, "original", f"{original_name}.json")
     
@@ -109,10 +109,9 @@ def process_executable(original_file_path, modified_folders, report_folder_base,
             modified_score = 0
         modified_scores.append(modified_score)
 
-    csv_writer.writerow([original_name, original_score] + modified_scores)
     print(f"Processed {original_name} with scores: Original - {original_score}, Modified - {modified_scores}")
 
-def process_reports(original_folder, modified_base_folder, report_folder_base, csv_path):
+def process_reports(original_folder, modified_base_folder, report_folder_base):
     os.makedirs(os.path.join(report_folder_base, "original"), exist_ok=True)
     
     modified_folders = get_modified_folders(modified_base_folder)
@@ -121,20 +120,16 @@ def process_reports(original_folder, modified_base_folder, report_folder_base, c
         os.makedirs(os.path.join(report_folder_base, subfolder), exist_ok=True)
 
     header_columns = ["Original Executable", "Original Score"] + sorted(modified_folders.keys(), key=lambda x: int(x))
-    
-    with open(csv_path, mode='w', newline='') as csv_file:
-        csv_writer = csv.writer(csv_file)
-        csv_writer.writerow(header_columns)
-        
-        for root, _, files in os.walk(original_folder):
-            for file in files:
-                if file.endswith(".exe"):
-                    process_executable(os.path.join(root, file), modified_folders, report_folder_base, csv_writer)
+      
+    for root, _, files in os.walk(original_folder):
+        for file in files:
+            if file.endswith(".exe"):
+                process_executable(os.path.join(root, file), modified_folders, report_folder_base)
 
 # Define paths
-original_folder = "/media/doonu/H/Problem_Space/Dummy/"
-modified_base_folder = "/media/doonu/H/Problem_Space/Manipulated_Executable_NOP/"
-report_folder_base = "/media/doonu/H/Problem_Space/Reports/"
-csv_path = "/media/doonu/H/Problem_Space/Community_Score/community_scores.csv"
+original_folder = "./dataset/Malware/"
+modified_base_folder = "./dataset/mutations/"
+report_folder_base = "./Reports/"
+csv_path = "./community_scores.csv"
 
-process_reports(original_folder, modified_base_folder, report_folder_base, csv_path)
+process_reports(original_folder, modified_base_folder, report_folder_base)

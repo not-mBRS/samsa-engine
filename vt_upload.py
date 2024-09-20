@@ -6,7 +6,7 @@ import random
 import sys
 import time
 
-API_KEY_VT = ""
+API_KEY_VT = "75646191efded01c9985d7433971552a5032a8421d3e026ebbb6e0832b0729ba"
 HEADERS = {
         "accept": "application/json",
         "x-apikey": API_KEY_VT
@@ -40,10 +40,14 @@ def get_report(analysis_id):
     url = f'https://www.virustotal.com/api/v3/analyses/{analysis_id}'
     report_json = api_request(url)
     if report_json:
+        count=0
         while report_json['data']['attributes']['status'] != 'completed':
             print("waiting for analysis completion...")
             report_json = api_request(url)
             time.sleep(10)
+            count+=1
+            if count==100:
+                exit()
         return report_json
     return {}
 def save_report(report_json, report_path):
@@ -68,7 +72,11 @@ def main():
         for filename in filenames:
             file_paths.append(os.path.join(dirpath, filename))
     for f in file_paths:
-        query_API(f)
+        if os.path.exists("./Reports2/"+f.split("/")[-3]+"/VTReport_"+f.split("/")[-1]+".json"):
+            print("Skipped")
+            continue
+        else:
+            query_API(f)
 
 
 if __name__ == "__main__":
