@@ -121,9 +121,9 @@ def process_executables(input_folder, output_folder_base, csv_path):
                             csv_writer.writerow([file_name, "N/A", "N/A", "Failed", str(e)])
 
 
-input_folder = "/media/doonu/H/Problem_Space/Dummy_2/"
-output_folder_base = "/media/doonu/H/Problem_Space/Dummy_Manipulated_Executable_NOP/"
-csv_path = "/media/doonu/H/Problem_Space/Modified_sections_log.csv"
+input_folder = "./dataset/malware_test"
+output_folder_base = "./dataset/malware_test_mut"
+csv_path = "./tmp/qua.csv"
 
 
 process_executables(input_folder, output_folder_base, csv_path)

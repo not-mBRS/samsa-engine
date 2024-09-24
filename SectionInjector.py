@@ -134,7 +134,7 @@ def process_executables(input_folder, outptut_folder, percentage=.5):
 def main():
     if not os.path.exists(output_folder):
         os.makedirs(output_folder)
-    for perc in [0.05, 0.1, 0.25, 0.5]:
+    for perc in [0.05, 0.25, 0.5, 0.98]:
         process_executables(input_folder, output_folder, perc)
 
 if __name__ == "__main__":
