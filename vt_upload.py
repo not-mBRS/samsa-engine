@@ -6,7 +6,8 @@ import random
 import sys
 import time
 
-API_KEY_VT = "75646191efded01c9985d7433971552a5032a8421d3e026ebbb6e0832b0729ba"
+API_KEY_VT = open("api.txt", "r").readline()
+breakpoint()
 HEADERS = {
         "accept": "application/json",
         "x-apikey": API_KEY_VT

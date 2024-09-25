@@ -4,7 +4,7 @@ import json
 import random
 import sys
 
-API_KEY_VT = "75646191efded01c9985d7433971552a5032a8421d3e026ebbb6e0832b0729ba"
+API_KEY_VT = open("api.txt", "r").readline()
 
 #@sleep_and_retry
 #@limits(calls=3, period=60)

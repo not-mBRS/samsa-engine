@@ -5,10 +5,10 @@ import requests
 import csv
 import time
 
-API_KEY = ''
+API_KEY_VT = open("api.txt", "r").readline()
 HEADERS = {
     'accept': 'application/json',
-    'x-apikey': API_KEY
+    'x-apikey': API_KEY_VT
 }
 
 def get_file_hash(file_path):

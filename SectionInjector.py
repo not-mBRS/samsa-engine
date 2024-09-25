@@ -74,7 +74,7 @@ def find_target_section(pe):
 def inject_random_nop(pe, bits, output_file, percentage=.9):
     if bits==32:
         mode = ks.KS_MODE_32
-    if bits==64:
+    elif bits==64:
         os.remove(output_file)
         return
         mode = ks.KS_MODE_64
@@ -88,7 +88,7 @@ def inject_random_nop(pe, bits, output_file, percentage=.9):
         return            
     slack_region_byte_count = get_slack_space(target_section.get_data())
     injection_size = int(slack_region_byte_count * percentage)
-    if injection_size < 16: 
+    if slack_region_byte_count < 16: 
         os.remove(output_file)
         return
     to_insert = []
@@ -120,6 +120,8 @@ def process_executables(input_folder, outptut_folder, percentage=.5):
             if not os.path.exists(family_folder):
                 os.makedirs(family_folder)
             output_file = os.path.join(family_folder, file_name)
+            if os.path.exists(output_file):
+                continue
             shutil.copyfile(input_file, output_file)
             
             r2 = r2pipe.open(output_file, ['-w'])
