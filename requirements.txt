@@ -1,3 +1,10 @@
 capstone==5.0.3
+certifi==2024.8.30
+charset-normalizer==3.3.2
+idna==3.10
 keystone-engine==0.9.2
+pefile==2024.8.26
 r2pipe==1.9.4
+ratelimit==2.2.1
+requests==2.32.3
+urllib3==2.2.3

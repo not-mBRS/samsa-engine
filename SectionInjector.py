@@ -53,7 +53,7 @@ for i in NOP_INSTRUCTIONS:
 
 exit()
 '''
-input_folder = "./dataset/Malware"
+input_folder = "./dataset/VXZoo"
 output_folder = "./dataset/mutations"
 
 def get_slack_space(section_data):
@@ -136,7 +136,7 @@ def process_executables(input_folder, outptut_folder, percentage=.5):
 def main():
     if not os.path.exists(output_folder):
         os.makedirs(output_folder)
-    for perc in [0.05, 0.25, 0.5, 0.98]:
+    for perc in [0.05]:
         process_executables(input_folder, output_folder, perc)
 
 if __name__ == "__main__":

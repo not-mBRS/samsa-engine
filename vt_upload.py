@@ -7,7 +7,6 @@ import sys
 import time
 
 API_KEY_VT = open("api.txt", "r").readline()
-breakpoint()
 HEADERS = {
         "accept": "application/json",
         "x-apikey": API_KEY_VT
