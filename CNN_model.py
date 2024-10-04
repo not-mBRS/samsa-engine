@@ -22,7 +22,7 @@ optim = optimizers.Adam(learning_rate=LEARNING_RATE, beta_1=MOMENT, beta_2=BETA_
 early_stop = callbacks.EarlyStopping(monitor="val_loss",
                            patience=7,
                            mode="min")
-tl_checkpoint_1 = callbacks.ModelCheckpoint(filepath="./",
+tl_checkpoint_1 = callbacks.ModelCheckpoint(filepath="./Weights/first_test.weights.keras",
                                   save_best_only=True,
                                   verbose=1)
 
@@ -30,47 +30,44 @@ def create_model(input_shape, n_classes, optimizer=optim):
     conv_base = applications.Xception(include_top=False,
                      weights='imagenet', 
                      input_shape=input_shape)
+    top_model = conv_base.output
     top_model = layers.GlobalAveragePooling2D()(top_model)
-    top_model = layers.Dense(n_classes, activation='softmax')(top_model)
+    output_layer = layers.Dense(n_classes, activation='softmax')(top_model)
 
 
-    model = Model(inputs=conv_base.input, outputs=conv_base.output)
+    model = Model(inputs=conv_base.input, outputs=output_layer)
     model.compile(optimizer=optimizer, 
                   loss='categorical_crossentropy',
                   metrics=['accuracy'])
     
     return model
 modello = create_model(input_shape, n_classes, optim)
-modello.summary()
+#modello.summary()
 
 ## DATASET
 
-download_dir = Path('./')
-train_data_dir = download_dir/'train'
-val_data_dir = download_dir/'val'
-test_data_dir = download_dir/'test'
-classes_names = sorted(os.listdir(download_dir/'train'))
+download_dir = Path('./dataset/')
+train_data_dir = download_dir/'Malware_train'
+val_data_dir = download_dir/'Malware_val'
+test_data_dir = download_dir/'Malware_test'
+#classes_names = sorted(os.listdir(download_dir/'train'))
 
 traingen = preprocessing.image_dataset_from_directory(train_data_dir, # (batch, samples, labels)
-                                               target_size=(DIM, DIM),
-                                               class_mode='categorical',
-                                               classes=classes_names,
+                                               image_size=(DIM, DIM),
+                                               label_mode='categorical',
                                                batch_size=BATCH_SIZE, 
                                                shuffle=True)
 
 validgen = preprocessing.image_dataset_from_directory(val_data_dir,
-                                               target_size=(DIM, DIM),
-                                               class_mode='categorical',
-                                               classes=classes_names,
+                                               image_size=(DIM, DIM),
+                                               label_mode='categorical',
                                                shuffle=True)
 
 testgen = preprocessing.image_dataset_from_directory(test_data_dir,
-                                             target_size=(DIM, DIM),
-                                             class_mode=None,
-                                             classes=classes_names,
+                                             image_size=(DIM, DIM),
+                                             label_mode=None,
                                              batch_size=1,
                                              shuffle=False)
-y_test = testgen.classes
   
 ## TRAINING
 
@@ -84,9 +81,9 @@ vgg_ft_history = modello.fit(traingen,
                                   verbose=1)
 
 ## EVALUATION
-
+y_test=1 #fix
 end_training_time = time.time()
-modello.load_weights('./')
+modello.load_weights('./Weights/first_test.weights.h5')
 
 start_prediction_time = time.time()
 vgg_preds_ft = modello.predict(testgen)
@@ -99,7 +96,7 @@ print("Training time: ", str(datetime.timedelta(seconds=end_training_time-start_
 print("Prediction time: ", str(datetime.timedelta(seconds=end_prediction_time-start_prediction_time)))
 print(classification_report(y_test, vgg_pred_classes_ft, digits=3))
 
-modello.load_weights('./')
+modello.load_weights('./Weights/first_test.weights.h5')
 cmp=ConfusionMatrixDisplay(confusion_matrix(y_test, vgg_pred_classes_ft))
 fig, ax = plt.subplots(figsize=(15,15))
 cmp.plot(ax=ax)

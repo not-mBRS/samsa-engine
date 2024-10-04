@@ -63,7 +63,7 @@ def process_file_or_directory(model, path):
 
 # Function to calculate metrics
 def calculate_metrics(true_labels, predictions):
-    accuracy = accuracy_score(true_labels, predictions
+    accuracy = accuracy_score(true_labels, predictions)
     print(f"True Labels: {true_labels}")
     print(f"Predictions: {predictions}")
     print(f"Accuracy: {accuracy:.4f}")
