@@ -59,7 +59,7 @@ def get_content(size):
     content = bytearray(nops)
     return content
     
-def inject_sections(input_path, output_path, section_data, section_names, scaling_factors):
+def inject_sections(input_path, output_path):
     with open(input_path, 'rb') as file:
         binary_data = file.read()
     modified_binary = copy.deepcopy(binary_data)
@@ -83,11 +83,4 @@ def inject_sections(input_path, output_path, section_data, section_names, scalin
 input_path = "./calc.exe"     # Original file path
 output_path = "./calc_demetrio.exe"    # Path for the modified file
 
-section_data = [
-    bytearray([0x90] * 100),  # Example data for section 1 (NOP instructions, 100 bytes)
-]
-
-section_names = ['.newsec1']   # Names for the new sections
-scaling_factors = [0.5, 1.0]               # Scaling factors for each section
-
-inject_sections(input_path, output_path, section_data, section_names, scaling_factors)
+inject_sections(input_path, output_path)
