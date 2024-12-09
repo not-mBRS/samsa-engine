@@ -25,9 +25,9 @@ def extract_file_names(input_csv, output_txt):
     print(f"Extracted {len(matching_files)} file names that meet the constraint to '{output_txt}'.")
 
 # Example usage
-input_csv = 'results100.csv'  # Replace with your input CSV file path
-output_txt = 'results_imbroccate100.txt'  # Replace with desired output text file path
-#extract_file_names(input_csv, output_txt)
+input_csv = '../Results/results_addition_xor.csv'  # Replace with your input CSV file path
+output_txt = '../Results/names_correct_add_xor.txt'  # Replace with desired output text file path
+extract_file_names(input_csv, output_txt)
 
 lista_correct = []
 

@@ -21,7 +21,7 @@ optim = optimizers.Adam(learning_rate=LEARNING_RATE, beta_1=MOMENT, beta_2=BETA_
 early_stop = callbacks.EarlyStopping(monitor="val_loss",
                            patience=7,
                            mode="min")
-tl_checkpoint_1 = callbacks.ModelCheckpoint(filepath="./Weights/first_test.weights.keras",
+tl_checkpoint_1 = callbacks.ModelCheckpoint(filepath="./first_test.weights.keras",
                                   save_best_only=True,
                                   verbose=1)
 
@@ -45,7 +45,7 @@ modello = create_model(input_shape, n_classes, optim)
 
 ## DATASET
 
-download_dir = Path('./datasets/')
+download_dir = Path('../Datasets/Images')
 train_data_dir = download_dir/'Malware_train'
 val_data_dir = download_dir/'Malware_val'
 test_data_dir = download_dir/'Malware_test_addition_imgs'
@@ -88,7 +88,7 @@ for images, labels in testgen:
 y_test=np.argmax(np.array(labels_list), axis=1)
 file_paths = testgen.file_paths
 
-modello.load_weights('./Weights/first_test.weights.keras')
+modello.load_weights('./first_test.weights.keras')
 
 vgg_preds_ft = modello.predict(testgen)
 confidence = np.max(vgg_preds_ft, axis=1)
@@ -103,10 +103,10 @@ df = pd.DataFrame({'name': file_paths,
                     'class_pred': vgg_pred_classes_ft, 
                     'confidence': confidence
                     })
-df.to_csv('./results_addition.csv', index=False)
+#df.to_csv('./clean.csv', index=False)
 
 
-modello.load_weights('./Weights/first_test.weights.keras')
+modello.load_weights('./first_test.weights.keras')
 cmp=ConfusionMatrixDisplay(confusion_matrix(y_test, vgg_pred_classes_ft))
 fig, ax = plt.subplots(figsize=(15,15))
 cmp.plot(ax=ax)

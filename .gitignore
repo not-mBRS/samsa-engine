@@ -1,5 +1,6 @@
 tmp/
 Datasets/
+Results/
 api.txt
 samsa-env/
 radare2/
