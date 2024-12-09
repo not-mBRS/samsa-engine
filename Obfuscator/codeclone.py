@@ -2,7 +2,8 @@ import shutil
 import keystone as ks #    assembler
 import capstone as cs # disassembler
 import r2pipe
-
+from capstone import x86_const
+import random
 mutables = ['nop', 'mov', 'or', 'xor', 'sub', 'add', 'cmp', 'test', 'shl', 'lea', 'not']
 
 class CloneEngine():
@@ -12,72 +13,109 @@ class CloneEngine():
         self.cs.detail = True
 
 def find_mut(meta, ins_analyzed):
-    opcodes=[]
-    mnemonics=[]
     new_inst=None
-    breakpoint()
     for i in meta.cs.disasm(bytes.fromhex(ins_analyzed['bytes']), 0x0):
-        mnemonics+=i.mnemonic
-        opcodes+=i.op_str.split(',')
-    if ins_analyzed['type'] == 'mov':
-        if opcodes[0][-1]=='x' and opcodes[1] == ' 0':
-            new_inst = 'xor {}, {};'.format(opcodes[0], opcodes[0]).encode()
-        # mov reg, 0 -> xor reg, reg / xor reg, 0 / and reg, 0
-        elif opcodes[0] != opcodes [1]:
-            new_inst = 'push {}; pop {}; nop;'.format(opcodes[1].strip(), opcodes[0]).encode()
-        # mov reg, reg2 -> push reg; pop reg2
-        elif opcodes[0] == opcodes [1]:
-            new_inst = 'nop;'.encode()
-        # mov reg, reg -> nop
-    #elif ins_analyzed['type'] == 'nop':
-        # nop -> nop
-    elif ins_analyzed['type'] == 'or':
-        if opcodes[1] == ' 0':
-        # or mem/reg, 0 -> nop
-            new_inst = 'nop;'.encode()
-        elif opcodes[0] == opcodes[1]:
-            new_inst = 'test {}, {};'.format(opcodes[0], opcodes[0]).encode()
-        # or reg, reg -> test reg, reg
-    elif ins_analyzed['type'] == 'xor':
-        if opcodes[1] == ' -1':
-            new_inst = 'not {};'.format(opcodes[0]).encode()
-        # xor reg/mem, -1 -> not reg/mem
-        elif opcodes[1] == ' 0':
-            new_inst = 'xor {}, {};'.format(opcodes[0], opcodes[0]).encode()
-        # xor reg, 0 -> xor reg, reg 
-        elif opcodes[1] == opcodes[0]:
-            new_inst = 'sub {}, {};'.format(opcodes[0], opcodes[0]).encode()
-        # xor reg, reg -> sub reg, reg
-    elif ins_analyzed['type'] == 'sub':
-        if opcodes[0] == opcodes[1]:
-            new_inst = 'xor {}, {};'.format(opcodes[0], opcodes[0]).encode()
-        # sub reg, reg -> xor reg, reg
-        else:
-            new_inst = 'add {}, {};'.format(opcodes[0], "-"+opcodes[0].strip()).encode()
-        # sub reg/mem, imm -> add reg/mem, -imm
-    elif ins_analyzed['type'] == 'add':
-        if opcodes[0] != opcodes[1]:
-            new_inst = 'sub {}, {};'.format(opcodes[0], "-"+opcodes[0].strip()).encode()
-        # add reg, imm -> sub reg, -imm
-        elif opcodes[0] == opcodes[1]:
-            new_inst = 'shl {}, 1;'.format(opcodes[0]).encode()
-        # add reg, reg -> shl reg, 1
-    elif ins_analyzed['type'] == 'cmp':
-        if opcodes[1] == ' 0':
-            new_inst = 'test {}, {};'.format(opcodes[0], opcodes[0]).encode()
-        # cmp reg, 0 -> test reg reg / and reg, reg / or reg, reg
-    elif ins_analyzed['type'] == 'test':
-        if opcodes[0] == opcodes[1]:
-            new_inst = 'or {}, {};'.format(opcodes[0], opcodes[0]).encode()
-        # test reg, reg -> or reg, reg
-    elif ins_analyzed['type'] == 'shl':
-        if opcodes[1] == ' 1':
-            new_inst = 'add {}, {};'.format(opcodes[0], opcodes[0]).encode()
-        # shl reg, 1 -> add reg, reg
-    #elif ins_analyzed['type'] == 'lea':
-        # lea reg, [imm] -> add mov, imm
-        # lea reg, [reg+imm] -> add reg, imm (fino a 127)
-        # lea reg, [reg2] -> add reg, reg2
+        breakpoint()
+        if ins_analyzed['type'] == 'mov':
+            if (i.operands[0].type == x86_const.X86_OP_REG and 
+                i.operands[1].type == x86_const.X86_OP_IMM and 
+                i.operands[1].imm == 0):
+                reg1 = i.op_str.split(", ")[0]
+                new_inst = 'xor {}, {};'.format(reg1, reg1).encode()
+            # mov reg, 0 -> xor reg, reg / xor reg, 0 / and reg, 0
+            elif (i.operands[0].type == x86_const.X86_OP_REG and 
+                i.operands[1].type == x86_const.X86_OP_REG and 
+                i.operands[0].reg != i.operands[1].reg):
+                regs = i.op_str.split(", ")
+                new_inst = 'push {}; pop {}; nop;'.format(regs[1], regs[0]).encode()
+            # mov reg, reg2 -> push reg; pop reg2
+            elif (i.operands[0].type == x86_const.X86_OP_REG and 
+                i.operands[1].type == x86_const.X86_OP_REG and 
+                i.operands[0].reg == i.operands[1].reg):
+                new_inst = 'nop;'.encode()
+            # mov reg, reg -> nop
+        #elif ins_analyzed['type'] == 'nop':
+            # nop -> nop
+        elif ins_analyzed['type'] == 'or':
+            if ((i.operands[0].type == x86_const.X86_OP_MEM or i.operands[0].type == x86_const.X86_OP_MEM ) and 
+                i.operands[1].type == x86_const.X86_OP_IMM and 
+                i.operands[1].imm == 0):            
+            # or mem/reg, 0 -> nop
+                new_inst = 'nop;'.encode()
+            elif (i.operands[0].type == x86_const.X86_OP_REG and 
+                i.operands[1].type == x86_const.X86_OP_REG and 
+                i.operands[0].reg == i.operands[1].reg):
+                reg1 = i.op_str.split(", ")[0]
+                new_inst = 'test {}, {};'.format(reg1, reg1).encode()
+            # or reg, reg -> test reg, reg
+        elif ins_analyzed['type'] == 'xor':
+            if ((i.operands[0].type == x86_const.X86_OP_MEM or i.operands[0].type == x86_const.X86_OP_MEM ) and 
+                i.operands[1].type == x86_const.X86_OP_IMM and 
+                i.operands[1].imm == -1):
+                reg1 = i.op_str.split(", ")[0]
+                new_inst = 'not {};'.format(reg1).encode()
+            # xor reg/mem, -1 -> not reg/mem
+            elif (i.operands[0].type == x86_const.X86_OP_REG and 
+                i.operands[1].type == x86_const.X86_OP_IMM and 
+                i.operands[1].imm == 0):
+                reg1 = i.op_str.split(", ")[0]
+                new_inst = 'xor {}, {};'.format(reg1, reg1).encode()
+            # xor reg, 0 -> xor reg, reg 
+            elif (i.operands[0].type == x86_const.X86_OP_REG and 
+                i.operands[1].type == x86_const.X86_OP_REG and 
+                i.operands[0].reg == i.operands[1].reg):
+                reg1 = i.op_str.split(", ")[0]
+                new_inst = 'sub {}, {};'.format(reg1, reg1).encode()
+            # xor reg, reg -> sub reg, reg
+        elif ins_analyzed['type'] == 'sub':
+            if (i.operands[0].type == x86_const.X86_OP_REG and 
+                i.operands[1].type == x86_const.X86_OP_REG and 
+                i.operands[0].reg == i.operands[1].reg):
+                reg1 = i.op_str.split(", ")[0]
+                new_inst = 'xor {}, {};'.format(reg1, reg1).encode()
+            # sub reg, reg -> xor reg, reg
+            elif ((i.operands[0].type == x86_const.X86_OP_MEM or i.operands[0].type == x86_const.X86_OP_REG ) and 
+                i.operands[1].type == x86_const.X86_OP_IMM):
+                reg1 = i.op_str.split(", ")[0]
+                new_inst = 'add {}, {};'.format(reg1, "-"+reg1).encode()
+            # sub reg/mem, imm -> add reg/mem, -imm
+        elif ins_analyzed['type'] == 'add':
+            if ((i.operands[0].type == x86_const.X86_OP_MEM or i.operands[0].type == x86_const.X86_OP_REG ) and 
+                i.operands[1].type == x86_const.X86_OP_IMM):
+                reg1 = i.op_str.split(", ")[0]
+                new_inst = 'sub {}, {};'.format(reg1, "-"+reg1).encode()
+            # add reg/mem, imm -> sub reg, -imm
+            elif (i.operands[0].type == x86_const.X86_OP_REG and 
+                i.operands[1].type == x86_const.X86_OP_REG and 
+                i.operands[0].reg == i.operands[1].reg):
+                reg1 = i.op_str.split(", ")[0]
+                new_inst = 'shl {}, 1;'.format(reg1).encode()
+            # add reg, reg -> shl reg, 1
+        elif ins_analyzed['type'] == 'cmp':
+            if (i.operands[0].type == x86_const.X86_OP_REG and 
+                i.operands[1].type == x86_const.X86_OP_IMM and 
+                i.operands[1].imm == 0):
+                reg1 = i.op_str.split(", ")[0]
+                new_inst = 'test {}, {};'.format(reg1, reg1).encode()
+            # cmp reg, 0 -> test reg reg / and reg, reg / or reg, reg
+        elif ins_analyzed['type'] == 'test':
+            if (i.operands[0].type == x86_const.X86_OP_REG and 
+                i.operands[1].type == x86_const.X86_OP_REG and 
+                i.operands[0].reg == i.operands[1].reg):
+                reg1 = i.op_str.split(", ")[0]
+                new_inst = 'or {}, {};'.format(reg1, reg1).encode()
+            # test reg, reg -> or reg, reg
+        elif ins_analyzed['type'] == 'shl':
+            if (i.operands[0].type == x86_const.X86_OP_REG and 
+                i.operands[1].type == x86_const.X86_OP_IMM and 
+                i.operands[1].imm == 1):
+                reg1 = i.op_str.split(", ")[0]
+                new_inst = 'add {}, {};'.format(reg1, reg1).encode()
+            # shl reg, 1 -> add reg, reg
+        #elif ins_analyzed['type'] == 'lea':
+            # lea reg, [imm] -> add mov, imm
+            # lea reg, [reg+imm] -> add reg, imm (fino a 127)
+            # lea reg, [reg2] -> add reg, reg2
     return new_inst
 
 
@@ -106,8 +144,8 @@ def patch_executable(r2, mutations):
     for idx, mutation in enumerate(mutations):
         r2.cmd(f"wx {mutation['bytes']} @{mutation['offset']}")
 
-input="./calc_try.exe"
-output="./calc_try_mod.exe"
+input="./tmp/calc_test_clone.exe"
+output="./tmp/calc_try_mod.exe"
 
 if __name__ == '__main__':
     shutil.copyfile(input, output)
