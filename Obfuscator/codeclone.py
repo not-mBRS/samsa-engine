@@ -4,39 +4,41 @@ import capstone as cs # disassembler
 import r2pipe
 from capstone import x86_const
 import random
+import os
 mutables = ['nop', 'mov', 'or', 'xor', 'sub', 'add', 'cmp', 'test', 'shl', 'lea', 'not']
-
+illegal_regs = ['al', 'ah', 'bl', 'bh', 'cl', 'ch', 'dl', 'dh', 'cs', 'dr0', 'dr4', 'cr6', 'cr1','cr2','cr3','cr4','cr5','dr1','dr2','dr3','dr5','dr6','dr7','cr0']
 class CloneEngine():
     def __init__(self) -> None:
-        self.ks = ks.Ks(ks.KS_ARCH_X86, ks.KS_MODE_64)
-        self.cs = cs.Cs(cs.CS_ARCH_X86, cs.CS_MODE_64)
+        self.ks = ks.Ks(ks.KS_ARCH_X86, ks.KS_MODE_32)
+        self.cs = cs.Cs(cs.CS_ARCH_X86, cs.CS_MODE_32)
         self.cs.detail = True
 
-def find_mut(meta, ins_analyzed):
+def find_mut(meta, ins_analyzed, debug=False):
     new_inst=None
     for i in meta.cs.disasm(bytes.fromhex(ins_analyzed['bytes']), 0x0):
-        breakpoint()
-        if ins_analyzed['type'] == 'mov':
-            if (i.operands[0].type == x86_const.X86_OP_REG and 
-                i.operands[1].type == x86_const.X86_OP_IMM and 
-                i.operands[1].imm == 0):
-                reg1 = i.op_str.split(", ")[0]
-                new_inst = 'xor {}, {};'.format(reg1, reg1).encode()
-            # mov reg, 0 -> xor reg, reg / xor reg, 0 / and reg, 0
-            elif (i.operands[0].type == x86_const.X86_OP_REG and 
-                i.operands[1].type == x86_const.X86_OP_REG and 
-                i.operands[0].reg != i.operands[1].reg):
-                regs = i.op_str.split(", ")
-                new_inst = 'push {}; pop {}; nop;'.format(regs[1], regs[0]).encode()
-            # mov reg, reg2 -> push reg; pop reg2
-            elif (i.operands[0].type == x86_const.X86_OP_REG and 
-                i.operands[1].type == x86_const.X86_OP_REG and 
-                i.operands[0].reg == i.operands[1].reg):
-                new_inst = 'nop;'.encode()
+        if i.mnemonic == 'mov':
+                if (i.operands[0].type == x86_const.X86_OP_REG and 
+                    i.operands[1].type == x86_const.X86_OP_IMM and 
+                    i.operands[1].imm == 0):
+                    reg1 = i.op_str.split(", ")[0]
+                    new_inst = 'xor {}, {};'.format(reg1, reg1).encode()
+                # mov reg, 0 -> xor reg, reg / xor reg, 0 / and reg, 0
+                elif (i.operands[0].type == x86_const.X86_OP_REG and 
+                    i.operands[1].type == x86_const.X86_OP_REG and 
+                    i.operands[0].reg != i.operands[1].reg):
+                    regs = i.op_str.split(", ")
+                    if regs[0] in illegal_regs or regs[1] in illegal_regs:
+                        break
+                    new_inst = 'push {}; pop {};'.format(regs[1], regs[0]).encode()
+                # mov reg, reg2 -> push reg; pop reg2
+                elif (i.operands[0].type == x86_const.X86_OP_REG and 
+                    i.operands[1].type == x86_const.X86_OP_REG and 
+                    i.operands[0].reg == i.operands[1].reg):
+                    new_inst = 'nop;'.encode()
             # mov reg, reg -> nop
         #elif ins_analyzed['type'] == 'nop':
             # nop -> nop
-        elif ins_analyzed['type'] == 'or':
+        elif i.mnemonic == 'or':
             if ((i.operands[0].type == x86_const.X86_OP_MEM or i.operands[0].type == x86_const.X86_OP_MEM ) and 
                 i.operands[1].type == x86_const.X86_OP_IMM and 
                 i.operands[1].imm == 0):            
@@ -48,7 +50,7 @@ def find_mut(meta, ins_analyzed):
                 reg1 = i.op_str.split(", ")[0]
                 new_inst = 'test {}, {};'.format(reg1, reg1).encode()
             # or reg, reg -> test reg, reg
-        elif ins_analyzed['type'] == 'xor':
+        elif i.mnemonic == 'xor':
             if ((i.operands[0].type == x86_const.X86_OP_MEM or i.operands[0].type == x86_const.X86_OP_MEM ) and 
                 i.operands[1].type == x86_const.X86_OP_IMM and 
                 i.operands[1].imm == -1):
@@ -67,7 +69,7 @@ def find_mut(meta, ins_analyzed):
                 reg1 = i.op_str.split(", ")[0]
                 new_inst = 'sub {}, {};'.format(reg1, reg1).encode()
             # xor reg, reg -> sub reg, reg
-        elif ins_analyzed['type'] == 'sub':
+        elif i.mnemonic == 'sub':
             if (i.operands[0].type == x86_const.X86_OP_REG and 
                 i.operands[1].type == x86_const.X86_OP_REG and 
                 i.operands[0].reg == i.operands[1].reg):
@@ -77,13 +79,13 @@ def find_mut(meta, ins_analyzed):
             elif ((i.operands[0].type == x86_const.X86_OP_MEM or i.operands[0].type == x86_const.X86_OP_REG ) and 
                 i.operands[1].type == x86_const.X86_OP_IMM):
                 reg1 = i.op_str.split(", ")[0]
-                new_inst = 'add {}, {};'.format(reg1, "-"+reg1).encode()
+                new_inst = 'add {}, {};'.format(reg1, "-"+str(i.operands[1].imm)).replace('--','').encode() # I'm ashemed of myself
             # sub reg/mem, imm -> add reg/mem, -imm
-        elif ins_analyzed['type'] == 'add':
+        elif i.mnemonic == 'add':
             if ((i.operands[0].type == x86_const.X86_OP_MEM or i.operands[0].type == x86_const.X86_OP_REG ) and 
                 i.operands[1].type == x86_const.X86_OP_IMM):
                 reg1 = i.op_str.split(", ")[0]
-                new_inst = 'sub {}, {};'.format(reg1, "-"+reg1).encode()
+                new_inst = 'sub {}, {};'.format(reg1, "-"+str(i.operands[1].imm)).replace('--','').encode() # I'm ashemed of myself
             # add reg/mem, imm -> sub reg, -imm
             elif (i.operands[0].type == x86_const.X86_OP_REG and 
                 i.operands[1].type == x86_const.X86_OP_REG and 
@@ -91,21 +93,21 @@ def find_mut(meta, ins_analyzed):
                 reg1 = i.op_str.split(", ")[0]
                 new_inst = 'shl {}, 1;'.format(reg1).encode()
             # add reg, reg -> shl reg, 1
-        elif ins_analyzed['type'] == 'cmp':
+        if i.mnemonic == 'cmp':
             if (i.operands[0].type == x86_const.X86_OP_REG and 
                 i.operands[1].type == x86_const.X86_OP_IMM and 
                 i.operands[1].imm == 0):
                 reg1 = i.op_str.split(", ")[0]
                 new_inst = 'test {}, {};'.format(reg1, reg1).encode()
             # cmp reg, 0 -> test reg reg / and reg, reg / or reg, reg
-        elif ins_analyzed['type'] == 'test':
+        elif i.mnemonic == 'test':
             if (i.operands[0].type == x86_const.X86_OP_REG and 
                 i.operands[1].type == x86_const.X86_OP_REG and 
                 i.operands[0].reg == i.operands[1].reg):
                 reg1 = i.op_str.split(", ")[0]
                 new_inst = 'or {}, {};'.format(reg1, reg1).encode()
             # test reg, reg -> or reg, reg
-        elif ins_analyzed['type'] == 'shl':
+        elif i.mnemonic == 'shl':
             if (i.operands[0].type == x86_const.X86_OP_REG and 
                 i.operands[1].type == x86_const.X86_OP_IMM and 
                 i.operands[1].imm == 1):
@@ -116,6 +118,8 @@ def find_mut(meta, ins_analyzed):
             # lea reg, [imm] -> add mov, imm
             # lea reg, [reg+imm] -> add reg, imm (fino a 127)
             # lea reg, [reg2] -> add reg, reg2
+    if debug and new_inst is not None:
+        print(ins_analyzed['opcode'], " -> ", new_inst)
     return new_inst
 
 
@@ -131,7 +135,10 @@ def mutate_function(meta, func):
         if ins_analyzed['type'] in mutables:
             mut = find_mut(meta, ins_analyzed)
             if mut is not None:
-                asm, _ = meta.ks.asm(mut)
+                try:
+                    asm, _ = meta.ks.asm(mut)
+                except:
+                    breakpoint()
                 bytesArr = ''.join(['{:02x}'.format(ins) for ins in asm])
                 list_mutations.append(
                     {'offset': ins_analyzed['offset'],
@@ -144,10 +151,7 @@ def patch_executable(r2, mutations):
     for idx, mutation in enumerate(mutations):
         r2.cmd(f"wx {mutation['bytes']} @{mutation['offset']}")
 
-input="./tmp/calc_test_clone.exe"
-output="./tmp/calc_try_mod.exe"
-
-if __name__ == '__main__':
+def metamorph_file(input, output):
     shutil.copyfile(input, output)
     r2 = r2pipe.open(output, ['-w'])
 
@@ -176,7 +180,28 @@ if __name__ == '__main__':
                             mutations.append(mutation)
 
             mutations = [offsbytes for sub_list in mutations for offsbytes in sub_list]
-            patch_executable(r2, meta, mutations)
+            patch_executable(r2, mutations)
 
         r2.quit()
+
+input_folder="./Datasets/Binaries/test"
+output_folder="./Datasets/Binaries/Malware_clone"
+
+def main():
+    if not os.path.exists(output_folder):
+        os.makedirs(output_folder)
+    for root, _, files in os.walk(input_folder):
+        for file_name in files:
+            input_file = os.path.join(root, file_name)
+            family_folder = output_folder+"/"+root.split('/')[-1]
+            if not os.path.exists(family_folder):
+                os.makedirs(family_folder)
+            output_file = os.path.join(family_folder, file_name)
+            if os.path.exists(output_file):
+                continue
+            metamorph_file(input_file, output_file)
+
+if __name__ == "__main__":
+    main()
+
 
