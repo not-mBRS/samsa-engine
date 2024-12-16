@@ -48,7 +48,7 @@ modello = create_model(input_shape, n_classes, optim)
 download_dir = Path('../Datasets/Images')
 train_data_dir = download_dir/'Malware_train'
 val_data_dir = download_dir/'Malware_val'
-test_data_dir = download_dir/'Malware_test_addition_imgs'
+test_data_dir = download_dir/'Malware_clone'
 #classes_names = sorted(os.listdir(download_dir/'train'))
 '''
 traingen = preprocessing.image_dataset_from_directory(train_data_dir, # (batch, samples, labels)
