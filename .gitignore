@@ -2,7 +2,7 @@ tmp/
 Datasets/
 Results/
 api.txt
-samsa-env/
+morph-env/
 radare2/
 *weights.keras
 .vscode
