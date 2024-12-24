@@ -6,14 +6,12 @@ import r2pipe
 '''
 Things that can be modified without breaking everything:
 - COFF Header timestamp
-- PE CLR Runtime Size
-- PE CLR Runtime Virtual Address
 - Section names
 - overlay
-- Major Image Version
-- Minor Image Version
-- Major Linker Version
-- Minor Linker Version
++ Major Image Version
++ Minor Image Version
++ Major Linker Version
++ Minor Linker Version
 - Major OS Version
 - Minor OS Version
 - Major Subsystem Version
@@ -25,7 +23,10 @@ Things that can be modified without breaking everything:
 '''
 
 def attack_header(pe_file_handler):
-    pe_file_handler.DOS_HEADER
+    pe_file_handler.dos_header
+    pe_file_handler.header
+    pe_file_handler.optional_header.time_date_stamps
+
     pe_file_handler.NT_HEADERS
     pe_file_handler.FILE_HEADER
     pe_file_handler.OPTIONAL_HEADER

@@ -61,7 +61,7 @@ def inject_random_nop(pe, bits, output_file, percentage=.9):
         mode = ks.KS_MODE_32
     elif bits==64:
         os.remove(output_file)
-        return
+        #return
         mode = ks.KS_MODE_64
     else:
         print(bits)
@@ -105,20 +105,20 @@ def process_executables(input_folder, outptut_folder, percentage=.5):
             if not os.path.exists(family_folder):
                 os.makedirs(family_folder)
             output_file = os.path.join(family_folder, file_name)
-            if os.path.exists(output_file):
-                continue
+            #if os.path.exists(output_file):
+            #    continue
             shutil.copyfile(input_file, output_file)
             
             r2 = r2pipe.open(output_file, ['-w'])
             exe_info = r2.cmdj('ij')
             if 'bin' in exe_info:
-                if exe_info['bin']['arch'] == 'x86':
+                #if exe_info['bin']['arch'] == 'x86':
                     bits = exe_info['bin']['bits']
                     pe = pefile.PE(output_file)
                     inject_random_nop(pe, bits, output_file, percentage)
 
-input_folder = "./prova"     
-output_folder = "./prova_2"    
+input_folder = "./Obfuscator/uno"     
+output_folder = "./Obfuscator/due"    
 def main():
     if not os.path.exists(output_folder):
         os.makedirs(output_folder)
