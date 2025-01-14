@@ -7,6 +7,9 @@ import keystone as ks #    assembler
 import capstone as cs # disassembler
 from capstone import x86_const
 import copy
+import argparse
+import string
+
 NOP_INSTRUCTIONS = [
     "ADD EAX, 0;",
     "ADD EBX, 0;",
@@ -48,6 +51,9 @@ for x in NOP_INSTRUCTIONS:
 
 MARGIN_PADDING = 16
 
+def generate_random_string():
+    return ''.join(random.choices(string.ascii_letters + string.digits, k=5))
+
 class Obfuscator:
     def __init__(self, output_file, dbg=True):
         self.ks = ks.Ks(ks.KS_ARCH_X86, ks.KS_MODE_32)
@@ -69,7 +75,7 @@ class Obfuscator:
                 target_section =  section
         slack_region_byte_count = target_section.padding
 
-        injection_size = int(slack_region_byte_count * percentage)
+        injection_size = int(len(slack_region_byte_count) * percentage)
         #if slack_region_byte_count < 16: 
         #    os.remove(output_file)
         #    return
@@ -81,15 +87,20 @@ class Obfuscator:
                 continue
             to_insert.append(encoding)
             injection_size-=count
+        exe_build = lief.PE.Builder(self.exec_lief)
+        exe_build.build()
+        original_data=bytearray(exe_build.get_build())
         to_insert_flatten = [item for sublist in to_insert for item in sublist]
-        first_part = target_section.pointerto_raw_data + 15
+        first_part = target_section.pointerto_raw_data + 15 + target_section.sizeof_raw_data - len(slack_region_byte_count)
+        breakpoint()
         modified_data = (
-                #original_data[:first_part] +
-                #bytes(to_insert_flatten) +
-                #original_data[first_part + len(bytes(to_insert_flatten)):] # last part
+                original_data[:first_part] +
+                bytes(to_insert_flatten) +
+                original_data[first_part + len(bytes(to_insert_flatten)):] # last part
             )          
+        self.exec_lief=lief.PE.parse(list(modified_data))
 
-    def addition(self):
+    def addition(self, perc):
         size_text=0
         for section in self.exec_lief.sections:
             if '.text' in section.name:
@@ -111,7 +122,7 @@ class Obfuscator:
         
         section = lief.PE.Section()
             
-        section.name = ".data4"
+        section.name = ""
         #xor_key = os.urandom(16)
         #key_length = len(xor_key)
         content_encrypted = content_to_append#bytearray(content_to_append[i] ^ xor_key[i % key_length] for i in range(len(content_to_append)))
@@ -120,7 +131,13 @@ class Obfuscator:
         section.characteristics = self.exec_lief.get_section(".text").characteristics   
         self.exec_lief.add_section(section)
         self.exec_lief.optional_header.sizeof_code *= 2
-        self.exec_lief=lief.PE.parse(lief.PE.Builder(self.exec_lief).build().get_build())
+        breakpoint()
+        exe_build = lief.PE.Builder(self.exec_lief)
+        exe_build.build()
+        self.path_file = self.path_file+"_addition"
+        self.exec_lief=lief.PE.parse(list(bytearray(exe_build.get_build())))
+        #with open(self.path_file+".exe", 'wb') as file:
+        #        file.write(bytearray(exe_build.get_build()))
 
     def find_mut(self, ins_analyzed):
         new_inst=None
@@ -252,6 +269,10 @@ class Obfuscator:
         
         return list_mutations
     
+    def patch_executable(r2, mutations):
+        for idx, mutation in enumerate(mutations):
+            r2.cmd(f"wx {mutation['bytes']} @{mutation['offset']}")
+
     def clone(self):
         r2 = r2pipe.open(self.path_file, ['-w'])
         exe_info = r2.cmdj('ij')
@@ -276,29 +297,35 @@ class Obfuscator:
                                 mutations.append(mutation)
 
                 mutations = [offsbytes for sub_list in mutations for offsbytes in sub_list]
-                #patch_executable(r2, mutations)
-
+                self.patch_executable(r2, mutations)
+            with open(self.path_file, 'rb') as file:
+                binary_data = file.read()
+            self.exec_lief=lief.PE.parse(list(copy.deepcopy(binary_data)))
             self.r2.quit()
 
     def metadata(self):
-        # Sure
-        breakpoint()
+        # + imported libraries
+        # + overlay
+        self.exec_lief.header.time_date_stamps = random.randint(0, 10)
+        self.exec_lief.optional_header.minor_image_version = random.randint(0, 10)
+        self.exec_lief.optional_header.major_image_version = random.randint(0, 10)
+        self.exec_lief.optional_header.minor_linker_version = random.randint(0, 10)
+        self.exec_lief.optional_header.major_linker_version = random.randint(0, 10)
+        self.exec_lief.optional_header.minor_operating_system_version = random.randint(0, 10)
+        self.exec_lief.optional_header.major_operating_system_version = random.randint(0, 10)
+        self.exec_lief.optional_header.minor_subsystem_version = random.randint(0, 10)
+        self.exec_lief.optional_header.major_subsystem_version = random.randint(0, 10)
+        added_libs=[]
+        for _ in range(random.randint(0, 10)):
+            added_libs.append(generate_random_string())
+            self.exec_lief.add_library(added_libs[-1])
+            for _ in range(random.randint(0, 10)):
+                self.exec_lief.add_import_function(added_libs[-1], generate_random_string())
 
-        self.exec_lief.header.time_date_stamps = 0
-        self.exec_lief.optional_header.minor_image_version = 0
-        self.exec_lief.optional_header.major_image_version = 0
-        self.exec_lief.optional_header.minor_linker_version = 0
-        self.exec_lief.optional_header.major_linker_version = 0
-        self.exec_lief.optional_header.minor_operating_system_version = 0
-        self.exec_lief.optional_header.major_operating_system_version = 0
-        self.exec_lief.optional_header.minor_subsystem_version = 0
-        self.exec_lief.optional_header.major_subsystem_version = 0
-        
-        if len(self.exec_lief.overlay)>0:
-            # do overaly damage
-            pass
-        #self.exec_lief.add_import_function()
-        #self.exec_lief.add_library()
+        exe_build = lief.PE.Builder(self.exec_lief)
+        exe_build.build()
+        self.path_file = self.path_file+"_metadata"
+        self.exec_lief=lief.PE.parse(list(bytearray(exe_build.get_build())))
 
         # Not sure
         #self.exec_lief.optional_header.sizeof_code
@@ -309,17 +336,11 @@ class Obfuscator:
         # Probably not
         #self.exec_lief.optional_header.win32_version_value
 
-        for section in self.exec_lief.sections:
-            section.name
-            section.virtual_size
-
         #self.exec_lief.authentihash_md5()
 
-    def fix(self):
-        pass
 
-output_folder="./tmp/testingtesting/tre"
-input_folder="./tmp/testingtesting/uno"
+output_folder="./tmp/testingtesting/out"
+input_folder="./tmp/testingtesting/in"
 
 def main():
     if not os.path.exists(output_folder):
@@ -332,17 +353,23 @@ def main():
             family_folder = output_folder+"/"+root.split('/')[-1]
             if not os.path.exists(family_folder):
                 os.makedirs(family_folder)
-            output_file = os.path.join(family_folder, file_name)
+            output_file = os.path.join(family_folder, file_name.split(".")[0]+"_copy")
             #if os.path.exists(output_file):
             #    continue
             shutil.copyfile(input_file, output_file)
-                        
+            breakpoint()            
             pe_binary = Obfuscator(output_file)
-            #pe_binary.addition()
-            #pe_binary.injection(0.5)
-            #pe_binary.clone()
+            #-pe_binary.addition(0.5)
+            #-pe_binary.injection(0.05)
+            #-pe_binary.clone()
             pe_binary.metadata()
-            pe_binary.fix()
 
 if __name__ == "__main__":
     main()
+
+'''
+TODO:
+    - saving the file at each step
+    - command line args
+    - complete header attack, "fix" checksums
+'''

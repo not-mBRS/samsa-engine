@@ -89,6 +89,7 @@ def inject_random_nop(pe, bits, output_file, percentage=.9):
     with open(output_file, 'rb') as f:
         original_data = f.read()
     with open(output_file, 'wb') as f:
+        breakpoint()
         modified_data = (
             original_data[:first_part] +
             bytes(to_insert_flatten) +
@@ -117,9 +118,10 @@ def process_executables(input_folder, outptut_folder, percentage=.5):
                     pe = pefile.PE(output_file)
                     inject_random_nop(pe, bits, output_file, percentage)
 
-input_folder = "./Obfuscator/uno"     
-output_folder = "./Obfuscator/due"    
+input_folder = "./tmp/testingtesting/in/a"     
+output_folder = "./tmp/testingtesting/due"    
 def main():
+    #breakpoint()
     if not os.path.exists(output_folder):
         os.makedirs(output_folder)
     for perc in [0.05, 0.25, 0.5, 0.98]:
