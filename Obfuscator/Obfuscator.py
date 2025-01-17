@@ -67,19 +67,26 @@ class Obfuscator:
             binary_data = file.read()
         self.exec_lief=lief.PE.parse(list(copy.deepcopy(binary_data)))
 
+    def read_file(self, name):
+        self.exec_lief=lief.PE.parse(name)
+
+    def write(self, name):
+        self.exec_lief.write(self.path_file+"_"+name)
+
     def injection(self, percentage):
         target_section = None
 
         for section in self.exec_lief.sections:
             if '.text' in section.name:
                 target_section =  section
-        slack_region_byte_count = target_section.padding
+        slack_region_byte_count = len(target_section.padding)
 
-        injection_size = int(len(slack_region_byte_count) * percentage)
+        injection_size = int(slack_region_byte_count * percentage)
         #if slack_region_byte_count < 16: 
         #    os.remove(output_file)
         #    return
         to_insert = []
+
         while(injection_size>1):
             random_nop = random.choice(NOP_INSTRUCTIONS)
             encoding, count = keys.asm(random_nop)
@@ -87,18 +94,21 @@ class Obfuscator:
                 continue
             to_insert.append(encoding)
             injection_size-=count
+
         exe_build = lief.PE.Builder(self.exec_lief)
         exe_build.build()
         original_data=bytearray(exe_build.get_build())
         to_insert_flatten = [item for sublist in to_insert for item in sublist]
-        first_part = target_section.pointerto_raw_data + 15 + target_section.sizeof_raw_data - len(slack_region_byte_count)
-        breakpoint()
-        modified_data = (
-                original_data[:first_part] +
-                bytes(to_insert_flatten) +
-                original_data[first_part + len(bytes(to_insert_flatten)):] # last part
-            )          
-        self.exec_lief=lief.PE.parse(list(modified_data))
+        first_part = target_section.pointerto_raw_data + 15 + target_section.sizeof_raw_data - slack_region_byte_count
+        with open(self.path_file+"_injection", 'wb') as f:
+            modified_data = (
+                    original_data[:first_part] +
+                    bytes(to_insert_flatten) +
+                    original_data[first_part + len(bytes(to_insert_flatten)):] # last part
+                )          
+            f.write(modified_data)
+        #self.read_file(self.path_file)
+        #self.write()
 
     def addition(self, perc):
         size_text=0
@@ -122,7 +132,7 @@ class Obfuscator:
         
         section = lief.PE.Section()
             
-        section.name = ""
+        section.name = ".data4"
         #xor_key = os.urandom(16)
         #key_length = len(xor_key)
         content_encrypted = content_to_append#bytearray(content_to_append[i] ^ xor_key[i % key_length] for i in range(len(content_to_append)))
@@ -131,13 +141,11 @@ class Obfuscator:
         section.characteristics = self.exec_lief.get_section(".text").characteristics   
         self.exec_lief.add_section(section)
         self.exec_lief.optional_header.sizeof_code *= 2
-        breakpoint()
         exe_build = lief.PE.Builder(self.exec_lief)
         exe_build.build()
-        self.path_file = self.path_file+"_addition"
         self.exec_lief=lief.PE.parse(list(bytearray(exe_build.get_build())))
-        #with open(self.path_file+".exe", 'wb') as file:
-        #        file.write(bytearray(exe_build.get_build()))
+        self.write("addition")
+
 
     def find_mut(self, ins_analyzed):
         new_inst=None
@@ -269,19 +277,19 @@ class Obfuscator:
         
         return list_mutations
     
-    def patch_executable(r2, mutations):
+    def patch_executable(self, r2, mutations):
         for idx, mutation in enumerate(mutations):
             r2.cmd(f"wx {mutation['bytes']} @{mutation['offset']}")
 
     def clone(self):
-        r2 = r2pipe.open(self.path_file, ['-w'])
+        r2 = r2pipe.open(self.path_file+"_addition", ['-w'])
         exe_info = r2.cmdj('ij')
         if 'bin' in exe_info:
             if exe_info['bin']['arch'] == 'x86':
                 bits = exe_info['bin']['bits']
                 r2.cmd('aaa')
         if r2 is not None:
-            functions = self.r2.cmdj('aflj')
+            functions = r2.cmdj('aflj')
 
             if functions is not None:
                 mutations = []
@@ -298,10 +306,11 @@ class Obfuscator:
 
                 mutations = [offsbytes for sub_list in mutations for offsbytes in sub_list]
                 self.patch_executable(r2, mutations)
-            with open(self.path_file, 'rb') as file:
+            with open(self.path_file+"_addition", 'rb') as file:
                 binary_data = file.read()
             self.exec_lief=lief.PE.parse(list(copy.deepcopy(binary_data)))
-            self.r2.quit()
+            r2.quit()
+            self.write("clone")
 
     def metadata(self):
         # + imported libraries
@@ -317,16 +326,16 @@ class Obfuscator:
         self.exec_lief.optional_header.major_subsystem_version = random.randint(0, 10)
         added_libs=[]
         for _ in range(random.randint(0, 10)):
-            added_libs.append(generate_random_string())
+            added_libs.append(generate_random_string()+".dll")
             self.exec_lief.add_library(added_libs[-1])
             for _ in range(random.randint(0, 10)):
                 self.exec_lief.add_import_function(added_libs[-1], generate_random_string())
 
         exe_build = lief.PE.Builder(self.exec_lief)
+        exe_build.build_imports(True)
         exe_build.build()
-        self.path_file = self.path_file+"_metadata"
         self.exec_lief=lief.PE.parse(list(bytearray(exe_build.get_build())))
-
+        self.write("metadata")
         # Not sure
         #self.exec_lief.optional_header.sizeof_code
         #self.exec_lief.optional_header.sizeof_initialized_data
@@ -353,16 +362,17 @@ def main():
             family_folder = output_folder+"/"+root.split('/')[-1]
             if not os.path.exists(family_folder):
                 os.makedirs(family_folder)
-            output_file = os.path.join(family_folder, file_name.split(".")[0]+"_copy")
+            output_file = os.path.join(family_folder, file_name)
             #if os.path.exists(output_file):
             #    continue
             shutil.copyfile(input_file, output_file)
-            breakpoint()            
             pe_binary = Obfuscator(output_file)
-            #-pe_binary.addition(0.5)
-            #-pe_binary.injection(0.05)
-            #-pe_binary.clone()
+            breakpoint()
             pe_binary.metadata()
+            pe_binary.addition(0.5)
+            pe_binary.clone()
+            pe_binary.injection(0.5)
+
 
 if __name__ == "__main__":
     main()

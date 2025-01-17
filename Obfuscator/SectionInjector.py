@@ -70,7 +70,8 @@ def inject_random_nop(pe, bits, output_file, percentage=.9):
         target_section= find_target_section(pe)
     except:
         os.remove(output_file)
-        return            
+        return  
+
     slack_region_byte_count = get_slack_space(target_section.get_data())
     injection_size = int(slack_region_byte_count * percentage)
     if slack_region_byte_count < 16: 
@@ -84,18 +85,19 @@ def inject_random_nop(pe, bits, output_file, percentage=.9):
             continue
         to_insert.append(encoding)
         injection_size-=count
+
     to_insert_flatten = [item for sublist in to_insert for item in sublist]
     first_part = target_section.PointerToRawData + 15 + len(target_section.get_data()) - slack_region_byte_count
+    breakpoint()
     with open(output_file, 'rb') as f:
         original_data = f.read()
     with open(output_file, 'wb') as f:
-        breakpoint()
         modified_data = (
             original_data[:first_part] +
             bytes(to_insert_flatten) +
             original_data[first_part + len(bytes(to_insert_flatten)):] # last part
         )
-        
+        breakpoint()
         f.write(modified_data)
 
 def process_executables(input_folder, outptut_folder, percentage=.5):
@@ -119,12 +121,12 @@ def process_executables(input_folder, outptut_folder, percentage=.5):
                     inject_random_nop(pe, bits, output_file, percentage)
 
 input_folder = "./tmp/testingtesting/in/a"     
-output_folder = "./tmp/testingtesting/due"    
+output_folder = "./tmp/testingtesting/out/a"    
 def main():
     #breakpoint()
     if not os.path.exists(output_folder):
         os.makedirs(output_folder)
-    for perc in [0.05, 0.25, 0.5, 0.98]:
+    for perc in [0.5]:
         process_executables(input_folder, output_folder, perc)
 
 if __name__ == "__main__":
