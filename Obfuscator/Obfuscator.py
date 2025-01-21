@@ -68,10 +68,14 @@ class Obfuscator:
         self.exec_lief=lief.PE.parse(list(copy.deepcopy(binary_data)))
 
     def read_file(self, name):
-        self.exec_lief=lief.PE.parse(name)
+        with open(name, 'rb') as file:
+            binary_data = file.read()
+        self.exec_lief=lief.PE.parse(list(binary_data))
 
-    def write(self, name):
-        self.exec_lief.write(self.path_file+"_"+name)
+    def write(self, name=""):
+        builder = lief.PE.Builder(self.exec_lief)
+        builder.build()
+        builder.write(self.path_file+"_"+name)
 
     def injection(self, percentage):
         target_section = None
@@ -100,15 +104,15 @@ class Obfuscator:
         original_data=bytearray(exe_build.get_build())
         to_insert_flatten = [item for sublist in to_insert for item in sublist]
         first_part = target_section.pointerto_raw_data + 15 + target_section.sizeof_raw_data - slack_region_byte_count
-        with open(self.path_file+"_injection", 'wb') as f:
+        with open(self.path_file+"_final", 'wb') as f:
             modified_data = (
                     original_data[:first_part] +
                     bytes(to_insert_flatten) +
                     original_data[first_part + len(bytes(to_insert_flatten)):] # last part
                 )          
             f.write(modified_data)
-        #self.read_file(self.path_file)
-        #self.write()
+        #self.read_file(self.path_file+"_injection")
+        #self.write("")
 
     def addition(self, perc):
         size_text=0
@@ -141,9 +145,9 @@ class Obfuscator:
         section.characteristics = self.exec_lief.get_section(".text").characteristics   
         self.exec_lief.add_section(section)
         self.exec_lief.optional_header.sizeof_code *= 2
-        exe_build = lief.PE.Builder(self.exec_lief)
-        exe_build.build()
-        self.exec_lief=lief.PE.parse(list(bytearray(exe_build.get_build())))
+        #exe_build = lief.PE.Builder(self.exec_lief)
+        #exe_build.build()
+        #self.exec_lief=lief.PE.parse(list(bytearray(exe_build.get_build())))
         self.write("addition")
 
 
@@ -308,22 +312,25 @@ class Obfuscator:
                 self.patch_executable(r2, mutations)
             with open(self.path_file+"_addition", 'rb') as file:
                 binary_data = file.read()
-            self.exec_lief=lief.PE.parse(list(copy.deepcopy(binary_data)))
+            self.exec_lief=lief.PE.parse(list(binary_data))
             r2.quit()
             self.write("clone")
 
     def metadata(self):
         # + imported libraries
         # + overlay
-        self.exec_lief.header.time_date_stamps = random.randint(0, 10)
-        self.exec_lief.optional_header.minor_image_version = random.randint(0, 10)
-        self.exec_lief.optional_header.major_image_version = random.randint(0, 10)
-        self.exec_lief.optional_header.minor_linker_version = random.randint(0, 10)
-        self.exec_lief.optional_header.major_linker_version = random.randint(0, 10)
-        self.exec_lief.optional_header.minor_operating_system_version = random.randint(0, 10)
-        self.exec_lief.optional_header.major_operating_system_version = random.randint(0, 10)
-        self.exec_lief.optional_header.minor_subsystem_version = random.randint(0, 10)
-        self.exec_lief.optional_header.major_subsystem_version = random.randint(0, 10)
+        try:
+            self.exec_lief.header.time_date_stamps = random.randint(0, 0xFF)
+        except:
+            return 0
+        self.exec_lief.optional_header.minor_image_version = random.randint(0, 0xFF)
+        self.exec_lief.optional_header.major_image_version = random.randint(0, 0xFF)
+        self.exec_lief.optional_header.minor_linker_version = random.randint(0, 0xFF)
+        self.exec_lief.optional_header.major_linker_version = random.randint(0, 0xFF)
+        self.exec_lief.optional_header.minor_operating_system_version = random.randint(0, 0xFF)
+        self.exec_lief.optional_header.major_operating_system_version = random.randint(0, 0xFF)
+        self.exec_lief.optional_header.minor_subsystem_version = random.randint(0, 0xFF)
+        self.exec_lief.optional_header.major_subsystem_version = random.randint(0, 0xFF)
         added_libs=[]
         for _ in range(random.randint(0, 10)):
             added_libs.append(generate_random_string()+".dll")
@@ -335,7 +342,8 @@ class Obfuscator:
         exe_build.build_imports(True)
         exe_build.build()
         self.exec_lief=lief.PE.parse(list(bytearray(exe_build.get_build())))
-        self.write("metadata")
+        self.write()
+        return 1
         # Not sure
         #self.exec_lief.optional_header.sizeof_code
         #self.exec_lief.optional_header.sizeof_initialized_data
@@ -348,30 +356,46 @@ class Obfuscator:
         #self.exec_lief.authentihash_md5()
 
 
-output_folder="./tmp/testingtesting/out"
-input_folder="./tmp/testingtesting/in"
+output_folder="./Datasets/Binaries/test_final"
+input_folder="./Datasets/Binaries/test/virut"
 
 def main():
     if not os.path.exists(output_folder):
         os.makedirs(output_folder)
     
     for root, _, files in os.walk(input_folder):
+        family_folder = output_folder+"/"+root.split('/')[-1]
+        if not os.path.exists(family_folder):
+            os.makedirs(family_folder)
         for file_name in files:
             print("Working on "+file_name)
             input_file = os.path.join(root, file_name)
-            family_folder = output_folder+"/"+root.split('/')[-1]
-            if not os.path.exists(family_folder):
-                os.makedirs(family_folder)
             output_file = os.path.join(family_folder, file_name)
             #if os.path.exists(output_file):
             #    continue
             shutil.copyfile(input_file, output_file)
             pe_binary = Obfuscator(output_file)
-            breakpoint()
-            pe_binary.metadata()
+            works = pe_binary.metadata()
+            if works == 0:
+                continue
             pe_binary.addition(0.5)
             pe_binary.clone()
-            pe_binary.injection(0.5)
+            pe_binary.injection(0.9)
+
+        try:
+            # Iterate through all files in the folder
+            for filename in os.listdir(family_folder):
+                file_path = os.path.join(family_folder, filename)
+
+                # Check if it's a file (not a folder) and does not end with '_final'
+                if os.path.isfile(file_path) and not filename.endswith('_final'):
+                    print(f"Removing file: {file_path}")  # Optional: log the removed file
+                    os.remove(file_path)
+
+            print("Cleanup complete.")
+        except Exception as e:
+            print(f"An error occurred: {e}")
+
 
 
 if __name__ == "__main__":
